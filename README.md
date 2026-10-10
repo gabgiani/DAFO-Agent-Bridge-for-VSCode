@@ -93,7 +93,7 @@ Download **[dafo-agent-bridge-vscode.vsix](https://github.com/gabgiani/DAFO-Agen
 code --install-extension dafo-agent-bridge-vscode.vsix
 ```
 
-The extension already includes the Agent Bridge binary for macOS (Apple Silicon and Intel) and Linux (x64 and arm64). That includes Remote-SSH, WSL and dev containers, where the extension runs on the remote Linux host.
+The extension already includes the Agent Bridge binary for macOS (Apple Silicon and Intel), Windows x64 and Linux (x64 and arm64). That includes Remote-SSH, WSL and dev containers, where the extension runs on the remote Linux host.
 
 ### 4. Link and name each window
 
@@ -135,7 +135,7 @@ VS Code still asks before the chat runs tools such as editing files, running com
 
 ## Command line
 
-The same binary is a full CLI. It is included in the app at `/Applications/DAFO Agent Bridge.app/Contents/MacOS/agent-bridge`, and also available as [agent-bridge-macos-universal.zip](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-macos-universal.zip), [agent-bridge-linux-x64.tar.gz](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-linux-x64.tar.gz) and [agent-bridge-linux-arm64.tar.gz](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-linux-arm64.tar.gz). The Linux builds are static and need no dependencies. On Linux, `install`/`uninstall`/`dashboard` are not available; run the node with `init` and `serve`.
+The same binary is a full CLI. It is included in the app at `/Applications/DAFO Agent Bridge.app/Contents/MacOS/agent-bridge`, and also available as [agent-bridge-macos-universal.zip](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-macos-universal.zip), [agent-bridge-linux-x64.tar.gz](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-linux-x64.tar.gz), [agent-bridge-linux-arm64.tar.gz](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-linux-arm64.tar.gz) and [agent-bridge-windows-x64.zip](https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-windows-x64.zip). The Linux builds are static and need no dependencies; the Windows build is not code-signed yet, so SmartScreen may warn. On Linux and Windows, `install`/`uninstall`/`dashboard` are not available; run the node with `init` and `serve`.
 
 ```sh
 # Node
@@ -164,14 +164,14 @@ Configuration and data are stored in `~/Library/Application Support/agent-bridge
 ## Requirements
 
 - **Node:** macOS 12 or later, on Apple Silicon or Intel.
-- **Extension:** VS Code 1.101 or later with GitHub Copilot Chat (agent mode). It runs on macOS and on Linux x64/arm64, locally or through Remote-SSH, WSL or dev containers. Windows is not supported yet.
+- **Extension:** VS Code 1.101 or later with GitHub Copilot Chat (agent mode). It runs on macOS, Windows x64 and Linux x64/arm64, locally or through Remote-SSH, WSL or dev containers.
 - **Network:** every linked machine must be able to reach the node's IP and port (LAN or VPN).
 
 ## Roadmap
 
 - **DAFO Swarm integration, phase 1 (implemented):** the node exposes MCP over HTTPS with background tasks. DAFO Swarm registers it as an MCP server with background tasks on. Its chat gets an immediate "queued" answer, polls the task, and posts the reply with a notification bell in the same conversation that asked.
 - **DAFO Swarm integration, phase 2:** VS Code agents ask Swarm, which answers from its knowledge base about the user's ideas and decisions.
-- **Later:** Windows support, automatic continuation when a reply arrives, multi-message threads between apps, attachments, and progress updates from the answering agent.
+- **Later:** automatic continuation when a reply arrives, multi-message threads between apps, attachments, and progress updates from the answering agent.
 
 ## License
 
