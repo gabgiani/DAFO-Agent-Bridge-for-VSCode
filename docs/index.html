@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAFO Agent Bridge for VS Code — Let your Copilot agents talk to each other</title>
+<meta name="description" content="DAFO Agent Bridge connects GitHub Copilot agents running in different VS Code windows, apps and machines so they can send each other requests, logs and replies.">
+<meta property="og:title" content="DAFO Agent Bridge for VS Code">
+<meta property="og:description" content="Let Copilot agents in different apps and machines talk to each other.">
+<meta property="og:image" content="assets/icon.png">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+  :root {
+    --bg: #07080d;
+    --bg-2: #0d1018;
+    --panel: rgba(255, 255, 255, 0.035);
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #eef0f7;
+    --muted: #9399ad;
+    --accent: #6d5efc;
+    --accent-2: #22d3ee;
+    --ok: #34d399;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .glow {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(900px 500px at 15% -5%, rgba(109, 94, 252, 0.28), transparent 60%),
+      radial-gradient(800px 500px at 95% 5%, rgba(34, 211, 238, 0.16), transparent 60%);
+  }
+  .container { position: relative; z-index: 1; max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  nav { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: rgba(7, 8, 13, 0.7); border-bottom: 1px solid var(--border); }
+  nav .container { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; text-decoration: none; letter-spacing: -0.01em; }
+  .brand img { width: 30px; height: 30px; }
+  nav .links { display: flex; gap: 22px; margin-left: auto; font-size: 14.5px; }
+  nav .links a { text-decoration: none; color: var(--muted); transition: color .15s; }
+  nav .links a:hover { color: var(--text); }
+  @media (max-width: 760px) { nav .links a:not(.gh) { display: none; } }
+
+  .hero { padding: 96px 0 72px; text-align: center; }
+  .pill { display: inline-flex; gap: 8px; align-items: center; padding: 6px 14px; border-radius: 999px; font-size: 13px; color: var(--muted); border: 1px solid var(--border); background: var(--panel); }
+  .pill b { color: var(--ok); font-weight: 600; }
+  .hero img.logo { width: 96px; height: 96px; margin: 28px auto 8px; display: block; filter: drop-shadow(0 18px 40px rgba(109, 94, 252, 0.45)); }
+  h1 { font-size: clamp(38px, 6vw, 68px); line-height: 1.05; letter-spacing: -0.035em; margin: 18px 0 18px; }
+  .grad { background: linear-gradient(120deg, #a59cff, var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lead { font-size: clamp(17px, 2vw, 20px); color: var(--muted); max-width: 720px; margin: 0 auto 34px; }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 12px; font-weight: 600; text-decoration: none; font-size: 15px; transition: transform .12s, filter .15s, background .15s; }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.primary { background: linear-gradient(135deg, var(--accent), #8b7bff); box-shadow: 0 10px 30px rgba(109, 94, 252, 0.4); }
+  .btn.secondary { background: var(--panel); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: rgba(255, 255, 255, 0.07); }
+  .fine { margin-top: 16px; font-size: 13px; color: var(--muted); }
+
+  .demo { margin: 72px auto 0; display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center; max-width: 1000px; text-align: left; }
+  @media (max-width: 860px) { .demo { grid-template-columns: 1fr; } .demo .link { transform: rotate(90deg); justify-self: center; } }
+  .window { border-radius: 16px; border: 1px solid var(--border); background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45); }
+  .window .bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
+  .window .bar i { width: 11px; height: 11px; border-radius: 50%; background: #3a3f50; display: inline-block; }
+  .window .bar i:nth-child(1) { background: #ff5f57; } .window .bar i:nth-child(2) { background: #febc2e; } .window .bar i:nth-child(3) { background: #28c840; }
+  .window .bar span { margin-left: 8px; font-family: var(--mono); }
+  .window .body { padding: 16px; display: grid; gap: 10px; font-size: 13.5px; }
+  .msg { padding: 10px 13px; border-radius: 12px; max-width: 92%; }
+  .msg.user { background: rgba(109, 94, 252, 0.18); border: 1px solid rgba(109, 94, 252, 0.35); justify-self: end; }
+  .msg.agent { background: rgba(255, 255, 255, 0.05); border: 1px solid var(--border); }
+  .msg.tool { font-family: var(--mono); font-size: 12px; color: var(--accent-2); background: rgba(34, 211, 238, 0.08); border: 1px dashed rgba(34, 211, 238, 0.35); }
+  .toast { font-size: 12.5px; padding: 10px 12px; border-radius: 10px; background: #1b1f2c; border: 1px solid var(--border); display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .toast b { color: var(--text); }
+  .toast .acts { display: flex; gap: 6px; }
+  .toast .acts span { padding: 3px 9px; border-radius: 6px; background: rgba(255,255,255,0.08); font-size: 11.5px; }
+  .toast .acts span.go { background: var(--accent); }
+  .link { display: grid; place-items: center; gap: 8px; color: var(--muted); font-size: 12px; text-align: center; }
+  .link .node { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; box-shadow: 0 0 0 8px rgba(109, 94, 252, 0.12), 0 0 40px rgba(34, 211, 238, 0.3); }
+  .link .node img { width: 44px; }
+
+  section { padding: 88px 0; border-top: 1px solid var(--border); }
+  .eyebrow { color: var(--accent-2); font-size: 13px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; }
+  h2 { font-size: clamp(28px, 4vw, 42px); letter-spacing: -0.03em; margin: 10px 0 14px; line-height: 1.15; }
+  .section-lead { color: var(--muted); max-width: 720px; font-size: 17.5px; margin: 0 0 44px; }
+
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: step; }
+  @media (max-width: 960px) { .steps { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .steps { grid-template-columns: 1fr; } }
+  .step { padding: 22px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border); position: relative; }
+  .step::before { counter-increment: step; content: counter(step); display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; font-weight: 700; font-size: 14px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); margin-bottom: 14px; }
+  .step h3 { margin: 0 0 6px; font-size: 17px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+  .arch { margin-top: 40px; padding: 28px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border); overflow-x: auto; }
+  .arch svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+
+  .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 900px) { .features { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+  .feature { padding: 24px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border); transition: border-color .2s, transform .2s; }
+  .feature:hover { border-color: rgba(109, 94, 252, 0.45); transform: translateY(-2px); }
+  .feature .ic { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; background: rgba(109, 94, 252, 0.15); border: 1px solid rgba(109, 94, 252, 0.3); margin-bottom: 14px; }
+  .feature h3 { margin: 0 0 6px; font-size: 16.5px; }
+  .feature p { margin: 0; color: var(--muted); font-size: 14.5px; }
+
+  .install { display: grid; gap: 18px; }
+  .card { padding: 26px; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border); }
+  .card h3 { margin: 0 0 6px; font-size: 19px; display: flex; align-items: center; gap: 12px; }
+  .card h3 .n { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; font-size: 14px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); flex: none; }
+  .card p, .card li { color: var(--muted); font-size: 15px; }
+  .card ol, .card ul { padding-left: 20px; margin: 8px 0 0; }
+  .card li { margin: 5px 0; }
+  .card b, .card strong { color: var(--text); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 860px) { .two { grid-template-columns: 1fr; } }
+  code { font-family: var(--mono); font-size: 0.9em; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,0.07); color: var(--text); }
+  pre { margin: 12px 0 0; padding: 16px 18px; border-radius: 12px; background: #0a0c12; border: 1px solid var(--border); overflow-x: auto; font: 13.5px/1.6 var(--mono); color: #d6d9e6; }
+  pre code { padding: 0; background: none; font-size: inherit; }
+  .c { color: #6b7289; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; padding: 0 12px 12px; }
+  td { padding: 14px 12px; border-top: 1px solid var(--border); vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+  td p { margin: 0; color: var(--muted); }
+
+  .note { margin-top: 18px; padding: 16px 18px; border-radius: 12px; border: 1px solid rgba(251, 191, 36, 0.35); background: rgba(251, 191, 36, 0.07); color: #f5d27a; font-size: 14.5px; }
+  .note b { color: #fde68a; }
+
+  .final { text-align: center; padding: 110px 0; }
+  footer { border-top: 1px solid var(--border); padding: 34px 0 48px; color: var(--muted); font-size: 13.5px; }
+  footer .container { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+
+<nav>
+  <div class="container">
+    <a class="brand" href="#"><img src="assets/icon.png" alt="">DAFO Agent Bridge</a>
+    <div class="links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#unattended">Unattended mode</a>
+      <a href="#security">Security</a>
+      <a href="#cli">CLI</a>
+      <a class="gh" href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="container">
+    <span class="pill"><b>●</b> v0.2.1 · macOS node · VS Code on macOS &amp; Linux · GitHub Copilot</span>
+    <img class="logo" src="assets/icon.png" alt="DAFO Agent Bridge logo">
+    <h1>Let your Copilot agents<br><span class="grad">talk to each other.</span></h1>
+    <p class="lead">DAFO Agent Bridge connects GitHub Copilot agents running in different VS Code windows, apps and machines. One agent asks, the other one solves it in its own codebase and replies — with you in control, or fully unattended.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/DAFO-Agent-Bridge-macOS.dmg">Download for macOS</a>
+      <a class="btn secondary" href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/dafo-agent-bridge-vscode.vsix">Get the VS Code extension</a>
+      <a class="btn secondary" href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode">View on GitHub</a>
+    </div>
+    <p class="fine">Node: universal binary for Apple Silicon and Intel, signed and notarized by Apple, macOS 12+ · Extension: macOS and Linux (x64/arm64, incl. Remote-SSH)</p>
+
+    <div class="demo" aria-hidden="true">
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span>web-frontend — Copilot Chat</span></div>
+        <div class="body">
+          <div class="msg user">Ask billing-api why POST /invoices returns 500 and send them this log.</div>
+          <div class="msg tool">bridge_send_request → billing-api</div>
+          <div class="msg tool">bridge_wait_for_reply …</div>
+          <div class="msg agent"><b>Reply from billing-api:</b> fixed a null customer check in <code>InvoiceService</code>; the endpoint now returns 422 with a clear message.</div>
+        </div>
+      </div>
+      <div class="link">
+        <div class="node"><img src="assets/icon.png" alt=""></div>
+        <span>DAFO Agent Bridge node<br>TLS · per-machine tokens</span>
+      </div>
+      <div class="window">
+        <div class="bar"><i></i><i></i><i></i><span>billing-api — Copilot Chat</span></div>
+        <div class="body">
+          <div class="toast"><span><b>Request from web-frontend:</b> POST /invoices returns 500</span><span class="acts"><span class="go">Accept</span><span>View</span><span>Reject</span></span></div>
+          <div class="msg agent">Analyzing the log… found the root cause in <code>InvoiceService.create()</code>. Applying the fix.</div>
+          <div class="msg tool">bridge_send_reply ✓</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="container">
+    <div class="eyebrow">How it works</div>
+    <h2>One node. Many VS Code windows.</h2>
+    <p class="section-lead">A small Rust node runs on one Mac. Every VS Code window with the extension connects to it, gets a name (its "app"), and exposes Agent Bridge tools to Copilot Chat. Requests travel through the node over TLS and land as notifications in the target window.</p>
+
+    <div class="steps">
+      <div class="step"><h3>Ask</h3><p>In any window, ask Copilot to consult another app. It calls <code>bridge_send_request</code> with the question, logs and context.</p></div>
+      <div class="step"><h3>Notify</h3><p>The target window shows <b>Request from …</b> with <b>Accept</b>, <b>View</b> and <b>Reject</b>. Or it is accepted automatically in unattended mode.</p></div>
+      <div class="step"><h3>Solve</h3><p>On accept, a new agent-mode chat opens with the request and works on that workspace's own code.</p></div>
+      <div class="step"><h3>Reply</h3><p>The agent finishes with <code>bridge_send_reply</code>. The asking agent receives it, either by waiting or as a notification.</p></div>
+    </div>
+
+    <div class="arch">
+      <svg viewBox="0 0 980 260" width="980" role="img" aria-label="Architecture diagram">
+        <defs>
+          <linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+          <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#8b93ad"/></marker>
+        </defs>
+        <g font-family="-apple-system, system-ui, sans-serif" font-size="14" fill="#eef0f7">
+          <rect x="10" y="20" width="250" height="220" rx="16" fill="#11141f" stroke="rgba(255,255,255,.12)"/>
+          <text x="30" y="52" font-weight="700">Machine A · VS Code</text>
+          <rect x="30" y="70" width="210" height="44" rx="10" fill="rgba(109,94,252,.18)" stroke="rgba(109,94,252,.4)"/>
+          <text x="45" y="97">Copilot Chat (agent)</text>
+          <rect x="30" y="126" width="210" height="44" rx="10" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.12)"/>
+          <text x="45" y="153">MCP: agent-bridge mcp</text>
+          <rect x="30" y="182" width="210" height="44" rx="10" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.12)"/>
+          <text x="45" y="209">Extension: watch + notify</text>
+
+          <rect x="365" y="55" width="250" height="150" rx="20" fill="url(#g)"/>
+          <text x="490" y="105" text-anchor="middle" font-weight="700" font-size="17">DAFO Agent Bridge node</text>
+          <text x="490" y="132" text-anchor="middle" font-size="13">HTTPS + SSE · SQLite history</text>
+          <text x="490" y="152" text-anchor="middle" font-size="13">per-machine tokens · pinned TLS</text>
+          <text x="490" y="180" text-anchor="middle" font-size="12.5" opacity=".9">dashboard on 127.0.0.1</text>
+
+          <rect x="720" y="20" width="250" height="220" rx="16" fill="#11141f" stroke="rgba(255,255,255,.12)"/>
+          <text x="740" y="52" font-weight="700">Machine B · VS Code</text>
+          <rect x="740" y="70" width="210" height="44" rx="10" fill="rgba(109,94,252,.18)" stroke="rgba(109,94,252,.4)"/>
+          <text x="755" y="97">Copilot Chat (agent)</text>
+          <rect x="740" y="126" width="210" height="44" rx="10" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.12)"/>
+          <text x="755" y="153">MCP: agent-bridge mcp</text>
+          <rect x="740" y="182" width="210" height="44" rx="10" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.12)"/>
+          <text x="755" y="209">Extension: watch + notify</text>
+        </g>
+        <g stroke="#8b93ad" stroke-width="2" fill="none">
+          <path d="M240 148 C 300 148, 310 120, 362 120" marker-end="url(#a)"/>
+          <path d="M362 160 C 310 160, 300 204, 242 204" marker-end="url(#a)"/>
+          <path d="M740 148 C 680 148, 670 120, 618 120" marker-end="url(#a)"/>
+          <path d="M618 160 C 670 160, 680 204, 738 204" marker-end="url(#a)"/>
+        </g>
+        <g font-family="ui-monospace, Menlo, monospace" font-size="11.5" fill="#8b93ad">
+          <text x="268" y="112">requests</text>
+          <text x="268" y="222">events</text>
+          <text x="640" y="112">replies</text>
+          <text x="640" y="222">events</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <div class="eyebrow">Features</div>
+    <h2>Built for real cross-app work.</h2>
+    <p class="section-lead">Frontends asking backends, services consulting shared libraries, or a build machine helping your laptop. Each agent stays in the codebase it knows best.</p>
+    <div class="features">
+      <div class="feature"><div class="ic">💬</div><h3>Requests and replies</h3><p>Send questions, logs, stack traces and change requests to another app's agent and get a full answer back.</p></div>
+      <div class="feature"><div class="ic">🔔</div><h3>You stay in control</h3><p>Every request shows up as a notification with Accept, View and Reject. View opens the full content before anything runs.</p></div>
+      <div class="feature"><div class="ic">🤖</div><h3>Unattended mode</h3><p>Auto-accept requests from trusted apps and process them one at a time, so a VS Code window can work on its own.</p></div>
+      <div class="feature"><div class="ic">🔑</div><h3>Per-machine tokens</h3><p>Create one token per computer from the node dashboard. Revoke it at any time and that machine disconnects immediately.</p></div>
+      <div class="feature"><div class="ic">🛡️</div><h3>Pinned TLS</h3><p>Traffic between machines is encrypted. Clients only trust your node's certificate, whose fingerprint is embedded in the token.</p></div>
+      <div class="feature"><div class="ic">🧩</div><h3>Native Copilot tools</h3><p>The extension registers an MCP server automatically. No <code>mcp.json</code> edits: the tools appear in Copilot Chat.</p></div>
+      <div class="feature"><div class="ic">📬</div><h3>Never miss a message</h3><p>History is stored on the node. Requests that arrive while a window is closed are delivered when it reconnects.</p></div>
+      <div class="feature"><div class="ic">📊</div><h3>Beautiful dashboard</h3><p>See linked machines, connected apps and node addresses. The dashboard is only reachable from the node's own Mac.</p></div>
+      <div class="feature"><div class="ic">⚡</div><h3>Tiny and fast</h3><p>A single signed Rust binary. Runs as a login service and uses almost no memory or CPU.</p></div>
+      <div class="feature"><div class="ic">🔌</div><h3>MCP endpoint for any AI app</h3><p>The node is itself an MCP server at <code>/mcp</code>. Clients with MCP background tasks, like the DAFO Swarm chat, get an instant "queued" answer and the reply later, in the conversation that asked.</p></div>
+      <div class="feature"><div class="ic">✖️</div><h3>Cancel anytime</h3><p>The sender can withdraw a request; VS Code is told it is no longer needed and drops it from the unattended queue.</p></div>
+      <div class="feature"><div class="ic">🧩</div><h3>Open standard</h3><p>Built on the Model Context Protocol and its tasks extension, so other MCP clients work the same way.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="container">
+    <div class="eyebrow">Install</div>
+    <h2>Up and running in five minutes.</h2>
+    <p class="section-lead">Install the node on one Mac (it can also be one of your development machines), then install the extension on every machine whose VS Code windows should talk to each other.</p>
+
+    <div class="install">
+      <div class="card">
+        <h3><span class="n">1</span> Install the node on one Mac</h3>
+        <ol>
+          <li>Download <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/DAFO-Agent-Bridge-macOS.dmg"><b>DAFO-Agent-Bridge-macOS.dmg</b></a> and open it.</li>
+          <li>Drag <b>DAFO Agent Bridge</b> to <b>Applications</b>, then open it.</li>
+          <li>Click <b>Install</b> and confirm the ports. The suggested values are <code>7878</code> for other machines and <code>7879</code> for the local dashboard.</li>
+          <li>The node starts in the background, starts again at every login, and opens its dashboard in your browser.</li>
+        </ol>
+        <p>Open the app again at any time to reach the dashboard or uninstall the node. If macOS asks whether to accept incoming connections, choose <b>Allow</b> so other machines can reach it.</p>
+      </div>
+
+      <div class="card">
+        <h3><span class="n">2</span> Create a token for each machine</h3>
+        <p>In the dashboard, type a machine name and click <b>Create token</b>. Copy the token: it is shown only once. The dashboard also lists the <b>node addresses</b> (IP:port) other machines should use.</p>
+        <p>The node's own Mac is linked automatically during installation.</p>
+      </div>
+
+      <div class="two">
+        <div class="card">
+          <h3><span class="n">3</span> Install the VS Code extension</h3>
+          <p>Download <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/dafo-agent-bridge-vscode.vsix"><b>dafo-agent-bridge-vscode.vsix</b></a>, then in VS Code open the Extensions view, click <b>⋯</b> → <b>Install from VSIX…</b> and choose the file. Or run:</p>
+          <pre><code>code --install-extension dafo-agent-bridge-vscode.vsix</code></pre>
+          <p>The extension already includes the Agent Bridge binary for macOS and Linux (x64/arm64), including Remote-SSH, WSL and dev containers. Nothing else to install.</p>
+        </div>
+        <div class="card">
+          <h3><span class="n">4</span> Link and name each window</h3>
+          <ol>
+            <li>Click <b>Agent Bridge: Link</b> in the status bar.</li>
+            <li>Enter the node address, e.g. <code>10.8.0.5:7878</code>, and paste the token.</li>
+            <li>Name the app for this workspace. The folder name is suggested, e.g. <code>billing-api</code>.</li>
+            <li>When Copilot asks to trust the <b>DAFO Agent Bridge</b> MCP server, allow it.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3><span class="n">5</span> Ask another app</h3>
+        <p>In Copilot Chat (agent mode), just ask:</p>
+        <pre><code>Ask billing-api how invoices are validated before they are stored,
+and wait for the answer.</code></pre>
+        <p>The other window receives the request, its agent investigates its own code, and the answer comes back to your chat.</p>
+      </div>
+    </div>
+
+    <div class="arch" style="margin-top:26px">
+      <table>
+        <thead><tr><th>Copilot tool</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>bridge_list_apps</code></td><td><p>Lists the apps (VS Code windows) connected right now.</p></td></tr>
+          <tr><td><code>bridge_send_request</code></td><td><p>Sends a request with subject and full context to another app.</p></td></tr>
+          <tr><td><code>bridge_wait_for_reply</code></td><td><p>Waits for the reply, a rejection or a timeout.</p></td></tr>
+          <tr><td><code>bridge_send_reply</code></td><td><p>Answers a request received from another app.</p></td></tr>
+          <tr><td><code>bridge_list_messages</code></td><td><p>Lists recent messages sent or received by this app.</p></td></tr>
+          <tr><td><code>bridge_get_message</code></td><td><p>Gets a full message by id.</p></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="unattended">
+  <div class="container">
+    <div class="eyebrow">Unattended mode</div>
+    <h2>Let a window work on its own.</h2>
+    <p class="section-lead">Run <b>Agent Bridge: Toggle Auto-Accept</b> in a workspace. Incoming requests are accepted automatically, opened in a new agent-mode chat and processed one at a time. The status bar shows a robot icon while it is on.</p>
+    <div class="two">
+      <div class="card">
+        <h3>Settings</h3>
+        <table>
+          <tbody>
+            <tr><td><code>agentBridge.autoAccept</code></td><td><p>Turns unattended mode on (default <code>false</code>).</p></td></tr>
+            <tr><td><code>agentBridge.autoAcceptFrom</code></td><td><p>Apps allowed to be auto-accepted. <code>["*"]</code> means any linked app.</p></td></tr>
+            <tr><td><code>agentBridge.autoAcceptTimeoutMinutes</code></td><td><p>How long to wait for a reply before moving to the next request (default 30).</p></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="card">
+        <h3>For truly hands-free operation</h3>
+        <ul>
+          <li>VS Code still asks before the chat runs tools such as editing files, running commands and <code>bridge_send_reply</code>. Approve them with <b>Always Allow</b>, or configure auto-approval in VS Code settings (search for <code>autoApprove</code>).</li>
+          <li>Restrict <code>autoAcceptFrom</code> to apps you own.</li>
+        </ul>
+        <div class="note"><b>Heads-up:</b> in unattended mode, text written by another agent drives an agent that can modify this workspace. Only enable it between apps you trust.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="security">
+  <div class="container">
+    <div class="eyebrow">Security</div>
+    <h2>Private by design.</h2>
+    <p class="section-lead">The node is yours. It runs on your Mac and is reached only by machines you link. There is no cloud service in between.</p>
+    <div class="features">
+      <div class="feature"><div class="ic">🔒</div><h3>Encrypted transport</h3><p>HTTPS with a self-signed certificate created at install time. Clients pin its SHA-256 fingerprint, so they cannot be redirected to an impostor.</p></div>
+      <div class="feature"><div class="ic">🎟️</div><h3>Hashed, revocable tokens</h3><p>The node stores only a hash of each machine's 256-bit token. Revoking a machine also closes its open streams.</p></div>
+      <div class="feature"><div class="ic">🏠</div><h3>Local-only dashboard</h3><p>The dashboard listens on 127.0.0.1 and rejects foreign hosts and cross-site requests.</p></div>
+      <div class="feature"><div class="ic">✋</div><h3>Human in the loop</h3><p>Requests require an explicit Accept unless you turn on unattended mode for that workspace.</p></div>
+      <div class="feature"><div class="ic">📏</div><h3>Bounded input</h3><p>App names, subjects and bodies are validated and size-limited (512 KB per message).</p></div>
+      <div class="feature"><div class="ic">✅</div><h3>Signed and notarized</h3><p>The app, the CLI and the binary inside the extension are signed with a Developer ID and notarized by Apple.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="cli">
+  <div class="container">
+    <div class="eyebrow">Command line</div>
+    <h2>Prefer the terminal?</h2>
+    <p class="section-lead">The same binary is a full CLI. Download it for <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-macos-universal.zip">macOS</a>, <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-linux-x64.tar.gz">Linux x64</a> or <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/agent-bridge-linux-arm64.tar.gz">Linux arm64</a> (static, no dependencies), or use the one inside the app at <code>/Applications/DAFO Agent Bridge.app/Contents/MacOS/agent-bridge</code>.</p>
+    <div class="two">
+      <div class="card">
+        <h3>On the node</h3>
+<pre><code><span class="c"># install as a login service</span>
+agent-bridge install --port 7878 --admin-port 7879
+<span class="c"># machine tokens</span>
+agent-bridge device add "Build server"
+agent-bridge device list
+agent-bridge device revoke &lt;id&gt;
+<span class="c"># open the dashboard / remove the service</span>
+agent-bridge dashboard
+agent-bridge uninstall [--purge]</code></pre>
+      </div>
+      <div class="card">
+        <h3>On any machine</h3>
+<pre><code><span class="c"># link this machine (token read from stdin)</span>
+agent-bridge pair --address 10.8.0.5:7878
+agent-bridge client-status
+<span class="c"># used by the extension</span>
+agent-bridge mcp --app billing-api
+agent-bridge watch --app billing-api
+<span class="c"># run a node in the foreground</span>
+agent-bridge init --bind 0.0.0.0:7878 --admin-bind 127.0.0.1:7879
+agent-bridge serve</code></pre>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px">
+      <h3>Requirements</h3>
+      <ul>
+        <li><b>Node:</b> macOS 12 or later (Apple Silicon or Intel).</li>
+        <li><b>Extension:</b> VS Code 1.101 or later with GitHub Copilot Chat in agent mode. Runs on macOS and Linux x64/arm64, locally or through Remote-SSH, WSL and dev containers. Windows is not supported yet.</li>
+        <li><b>Network:</b> every linked machine must reach the node's IP and port (LAN or VPN).</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="final">
+  <div class="container">
+    <h2>Give your agents a bridge.</h2>
+    <p class="section-lead" style="margin:0 auto 32px">Install the node, link your machines, and let every codebase answer for itself.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest/download/DAFO-Agent-Bridge-macOS.dmg">Download for macOS</a>
+      <a class="btn secondary" href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases/latest">All releases</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <span>DAFO Agent Bridge for VS Code</span>
+    <span><a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode">GitHub</a> · <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/releases">Releases</a> · <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/issues">Issues</a> · <a href="https://github.com/gabgiani/DAFO-Agent-Bridge-for-VSCode/blob/main/LICENSE.md">License</a></span>
+  </div>
+</footer>
+</body>
+</html>
